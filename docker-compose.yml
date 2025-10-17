@@ -1,0 +1,283 @@
+services:
+  # Infrastructure Services
+  postgres:
+    image: postgres:16-alpine
+    container_name: astrology-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - astrology-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: astrology-redis
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${REDIS_PORT:-6380}:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - astrology-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: Redis Commander - Web GUI for Redis
+  redis-commander:
+    image: ghcr.io/joeferner/redis-commander:latest
+    container_name: astrology-redis-gui
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${REDIS_COMMANDER_PORT:-8081}:8081"
+    environment:
+      - REDIS_HOSTS=local:astrology-redis:6379:0:${REDIS_PASSWORD}
+    depends_on:
+      - redis
+    networks:
+      - astrology-network
+    profiles:
+      - tools  # Only starts when explicitly enabled
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: astrology-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "${RABBITMQ_PORT:-5673}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15673}:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+      - RABBITMQ_DEFAULT_VHOST=${RABBITMQ_VHOST}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - astrology-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: astrology-qdrant
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${QDRANT_HTTP_PORT:-6334}:6333"
+      - "0.0.0.0:${QDRANT_GRPC_PORT:-6335}:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    networks:
+      - astrology-network
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 10s bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Application Services
+  astrology-api:
+    build:
+      context: ./astrology
+      dockerfile: Dockerfile
+    container_name: astrology-api
+    restart: unless-stopped
+    ports:
+      - "${ASTROLOGY_API_PORT:-8087}:8087"
+    networks:
+      - astrology-network
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 5 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/8087' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  astrology-mcp:
+    build:
+      context: ./astrology
+      dockerfile: Dockerfile.mcp
+    container_name: astrology-mcp
+    restart: unless-stopped
+    ports:
+      - "${ASTROLOGY_MCP_PORT:-8585}:8585"
+    depends_on:
+      astrology-api:
+        condition: service_healthy
+    environment:
+      - VEDASTRO_API_URL=http://astrology-api:8087
+      - MCP_PORT=8585
+    networks:
+      - astrology-network
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 5 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/8585' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  memory-service:
+    build:
+      context: ./memory
+      dockerfile: Dockerfile
+    container_name: astrology-memory
+    restart: unless-stopped
+    ports:
+      - "${MEMORY_SERVICE_PORT:-8085}:8085"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    environment:
+      - OLLAMA_BASE_URL=${OLLAMA_HOST}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION}
+      - USE_LLM_REFORMAT=${USE_LLM_REFORMAT}
+    networks:
+      - astrology-network
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 5 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/8085' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # Database Migration Init Container
+  bot-init:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: astrology-bot-init
+    command: sh -c "alembic upgrade head || echo 'Migrations completed or not needed'"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - CHAT_ENCRYPTION_KEY=${CHAT_ENCRYPTION_KEY}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=${REDIS_DB}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_CHAT_HISTORY_LIMIT=${REDIS_CHAT_HISTORY_LIMIT}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - RABBITMQ_VHOST=${RABBITMQ_VHOST}
+      - RABBITMQ_QUEUE=${RABBITMQ_QUEUE}
+      - RABBITMQ_WORKERS=${RABBITMQ_WORKERS}
+      - OLLAMA_HOST=${OLLAMA_HOST}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - ENABLE_THINKING=${ENABLE_THINKING}
+      - THINKING_MAX_TOKENS=${THINKING_MAX_TOKENS}
+      - THINKING_TEMPERATURE=${THINKING_TEMPERATURE}
+      - MEM0_SERVICE_URL=http://memory-service:8085
+      - ASTROLOGY_API_URL=http://astrology-mcp:8585
+      - LOG_LEVEL=${LOG_LEVEL}
+      - MAX_STRIKES=${MAX_STRIKES}
+      - ENABLE_PROFANITY_FILTER=${ENABLE_PROFANITY_FILTER}
+    networks:
+      - astrology-network
+    restart: "no"
+
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: astrology-bot
+    restart: unless-stopped
+    ports:
+      - "${BOT_PORT:-8282}:8282"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      memory-service:
+        condition: service_healthy
+      astrology-mcp:
+        condition: service_healthy
+      bot-init:
+        condition: service_completed_successfully
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - CHAT_ENCRYPTION_KEY=${CHAT_ENCRYPTION_KEY}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=${REDIS_DB}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_CHAT_HISTORY_LIMIT=${REDIS_CHAT_HISTORY_LIMIT}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - RABBITMQ_VHOST=${RABBITMQ_VHOST}
+      - RABBITMQ_QUEUE=${RABBITMQ_QUEUE}
+      - RABBITMQ_WORKERS=${RABBITMQ_WORKERS}
+      - OLLAMA_HOST=${OLLAMA_HOST}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - ENABLE_THINKING=${ENABLE_THINKING}
+      - THINKING_MAX_TOKENS=${THINKING_MAX_TOKENS}
+      - THINKING_TEMPERATURE=${THINKING_TEMPERATURE}
+      - MEM0_SERVICE_URL=http://memory-service:8085
+      - ASTROLOGY_API_URL=http://astrology-mcp:8585
+      - LOG_LEVEL=${LOG_LEVEL}
+      - MAX_STRIKES=${MAX_STRIKES}
+      - ENABLE_PROFANITY_FILTER=${ENABLE_PROFANITY_FILTER}
+    volumes:
+      - ./bot/logs:/app/logs
+    networks:
+      - astrology-network
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 5 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/8282' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+networks:
+  astrology-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  qdrant_data:

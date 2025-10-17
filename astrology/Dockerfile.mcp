@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install required system packages
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy requirements for MCP server
+COPY requirements.mcp.txt .
+RUN pip install --no-cache-dir -r requirements.mcp.txt
+
+# Copy MCP server code
+COPY mcp_server.py .
+
+# Expose MCP port
+EXPOSE 8585
+
+# Run MCP server
+CMD ["python", "mcp_server.py"]

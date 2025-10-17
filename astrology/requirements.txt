@@ -1,0 +1,6 @@
+fastapi[standard]
+uvicorn
+requests
+pydantic
+pyswisseph
+pytz

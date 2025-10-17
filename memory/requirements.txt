@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+mem0ai
+ollama
+pydantic
+python-dotenv
+pytest
+httpx
+qdrant-client
