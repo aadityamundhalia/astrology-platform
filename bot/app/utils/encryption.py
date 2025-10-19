@@ -1,5 +1,6 @@
-"""Chat encryption utilities using Fernet (symmetric encryption)"""
+"""Chat encryption utilities using Fernet with compression"""
 import logging
+import zlib
 from cryptography.fernet import Fernet, InvalidToken
 from config import get_settings
 
@@ -7,7 +8,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 class ChatEncryption:
-    """Handle chat message encryption and decryption"""
+    """Handle chat message encryption and decryption with compression"""
     
     def __init__(self):
         try:
@@ -18,19 +19,23 @@ class ChatEncryption:
     
     def encrypt(self, plaintext: str) -> str:
         """
-        Encrypt a message
+        Compress and encrypt a message
         
         Args:
             plaintext: The message to encrypt
             
         Returns:
-            Encrypted message as base64 string
+            Compressed and encrypted message as base64 string
         """
         try:
             if not plaintext:
                 return ""
             
-            encrypted = self.cipher.encrypt(plaintext.encode())
+            # Compress first (level=9 for maximum compression)
+            compressed = zlib.compress(plaintext.encode(), level=9)
+            
+            # Then encrypt the compressed data
+            encrypted = self.cipher.encrypt(compressed)
             return encrypted.decode()
         except Exception as e:
             logger.error(f"Encryption failed: {e}")
@@ -38,20 +43,31 @@ class ChatEncryption:
     
     def decrypt(self, ciphertext: str) -> str:
         """
-        Decrypt a message
+        Decrypt and decompress a message
         
         Args:
             ciphertext: The encrypted message
             
         Returns:
-            Decrypted plaintext message
+            Decrypted and decompressed plaintext message
         """
         try:
             if not ciphertext:
                 return ""
             
+            # Decrypt first
             decrypted = self.cipher.decrypt(ciphertext.encode())
-            return decrypted.decode()
+            
+            # Then decompress
+            try:
+                decompressed = zlib.decompress(decrypted)
+                return decompressed.decode()
+            except zlib.error:
+                # Backward compatibility: if decompression fails, 
+                # assume it's an old uncompressed encrypted message
+                logger.warning("Decompression failed - attempting to read as uncompressed")
+                return decrypted.decode()
+                
         except InvalidToken:
             logger.error("Invalid encryption token - message cannot be decrypted")
             return "[ENCRYPTED - Cannot decrypt]"

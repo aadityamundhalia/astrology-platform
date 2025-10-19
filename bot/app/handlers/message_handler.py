@@ -10,8 +10,13 @@ import uuid
 from app.database import AsyncSessionLocal
 from app.models import User
 from app.utils.validators import validate_birth_data
+from app.utils.profanity_filter import is_rude_or_aggressive
+from app.agents.warning_agent import WarningAgent
 
 logger = logging.getLogger(__name__)
+
+# Initialize warning agent
+warning_agent = WarningAgent()
 
 async def handle_message(
     update: Update, 
@@ -50,8 +55,9 @@ async def handle_message(
                     language_code=message.from_user.language_code,
                     is_premium=message.from_user.is_premium or False,
                     date=int(message.date.timestamp()),
-                    is_active=True,  # Default active
-                    priority=5  # Default priority
+                    is_active=True,
+                    priority=5,
+                    strikes=0
                 )
                 db.add(user)
                 await db.commit()
@@ -69,6 +75,58 @@ async def handle_message(
                 await telegram_service.send_message(chat_id, response)
                 return
             
+            # Check for rude/aggressive language
+            is_rude, reason = is_rude_or_aggressive(text)
+            
+            if is_rude:
+                logger.warning(f"⚠️ Rude message from user {user_id}: {reason}")
+                
+                # Get current strikes before incrementing
+                current_strikes = user.strikes or 0
+                
+                # Increment strike count
+                user.strikes = current_strikes + 1
+                
+                # Check if user should be suspended (3 strikes = suspension)
+                if user.strikes >= 3:
+                    user.is_active = False
+                    await db.commit()
+                    
+                    stop_typing.set()
+                    if typing_task:
+                        await typing_task
+                    
+                    response = (
+                        f"🚫 {user.first_name}, your account has been suspended due to repeated violations of our community guidelines.\n\n"
+                        "If you believe this is an error, please contact support."
+                    )
+                    await telegram_service.send_message(chat_id, response)
+                    return
+                
+                # Save the strike
+                await db.commit()
+                
+                # Generate contextual warning using WarningAgent
+                try:
+                    warning = await warning_agent.generate_warning(
+                        user_message=text,
+                        reason=reason,
+                        user_name=user.first_name,
+                        strikes=current_strikes  # Pass strikes BEFORE increment
+                    )
+                except Exception as e:
+                    logger.error(f"Error generating warning: {e}")
+                    # Use fallback
+                    warning = warning_agent._get_fallback_warning(user.first_name, current_strikes)
+                
+                stop_typing.set()
+                if typing_task:
+                    await typing_task
+                
+                await telegram_service.send_message(chat_id, warning)
+                return
+            
+            # Rest of your existing code...
             has_birth_data = validate_birth_data(
                 user.date_of_birth, 
                 user.time_of_birth, 
@@ -123,7 +181,7 @@ async def handle_message(
                 'user_id': user_id,
                 'chat_id': chat_id,
                 'message': text,
-                'priority': user.priority,  # Include priority
+                'priority': user.priority,
                 'user_context': {
                     'name': user.first_name,
                     'date_of_birth': user.date_of_birth,

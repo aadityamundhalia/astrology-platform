@@ -418,7 +418,7 @@ client = QdrantClient(
 
 ## 📝 License
 
-[Your License Here]
+MIT
 
 ## 🆘 Support
 

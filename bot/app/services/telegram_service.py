@@ -68,31 +68,30 @@ class TelegramService:
                 pass
             raise
     
-    def setup_application(self, message_handler, conversation_handler, clear_handler, start_handler=None, help_handler=None, info_handler=None):
-        """Setup telegram application with message and command handlers"""
-        self.application = Application.builder().token(settings.telegram_bot_token).build()
+    def setup_application(
+        self,
+        message_handler,
+        conversation_handler,
+        clear_handler,
+        help_handler,
+        info_handler
+    ):
+        """Setup the Telegram application with handlers"""
+        application = Application.builder().token(settings.telegram_bot_token).build()
         
-        # Add command handlers
-        if start_handler:
-            self.application.add_handler(CommandHandler("start", start_handler))
+        # Add conversation handler FIRST (includes /start and /change)
+        application.add_handler(conversation_handler)
         
-        if help_handler:
-            self.application.add_handler(CommandHandler("help", help_handler))
+        # Add other command handlers
+        application.add_handler(CommandHandler("help", help_handler))
+        application.add_handler(CommandHandler("info", info_handler))
+        application.add_handler(CommandHandler("clear", clear_handler))
         
-        if info_handler:
-            self.application.add_handler(CommandHandler("info", info_handler))
+        # Add message handler (lowest priority)
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
         
-        # Add conversation handler for birth details (BEFORE clear and message handlers)
-        self.application.add_handler(conversation_handler)
-        
-        self.application.add_handler(CommandHandler("clear", clear_handler))
-        
-        # Add message handler (must be last)
-        self.application.add_handler(
-            MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler)
-        )
-        
-        return self.application
+        self.application = application
+        return application
     
     async def save_chat_to_db(self, db, user_id: int, message_type: str, message: str):
         """Save chat message to database with encryption support"""

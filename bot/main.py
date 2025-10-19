@@ -15,15 +15,14 @@ from app.services.queue_service import QueueService
 from app.agents.rudie_agent import RudieAgent
 from app.agents.extraction_agent import ExtractionAgent
 from app.workers.astrology_worker import AstrologyWorker
+from app.agents.warning_agent import WarningAgent
 
-# Import handlers - remove the state imports
 from app.handlers.command_handlers import (
-    handle_start,
     handle_help,
     handle_clear,
     handle_info
 )
-from app.handlers.conversation_handlers import birth_details_conversation  # Just import the handler
+from app.handlers.conversation_handlers import birth_details_conversation
 from app.handlers.message_handler import handle_message
 
 # Configure logging
@@ -43,6 +42,7 @@ queue_service = QueueService()
 # Initialize agents
 extraction_agent = ExtractionAgent()
 rudie_agent = RudieAgent(astrology_service)
+warning_agent = WarningAgent()
 
 # Initialize worker
 astrology_worker = AstrologyWorker(
@@ -55,10 +55,10 @@ astrology_worker = AstrologyWorker(
 # Create FastAPI app
 app = FastAPI(title="Astrology Bot")
 
-# Wrapper functions for handlers
-async def _handle_start(update, context):
-    """Wrapper for start handler"""
-    return await handle_start(update, context, telegram_service)
+# Wrapper functions for handlers - REMOVE _handle_start
+# async def _handle_start(update, context):
+#     """Wrapper for start handler"""
+#     return await handle_start(update, context, telegram_service)
 
 async def _handle_help(update, context):
     """Wrapper for help handler"""
@@ -135,14 +135,14 @@ async def lifespan(app: FastAPI):
     
     logger.info(f"✅ Started {settings.rabbitmq_workers} worker(s)")
     
-    # Start Telegram bot
+    # Start Telegram bot - REMOVE start_handler parameter
     application = telegram_service.setup_application(
         message_handler=_handle_message,
         conversation_handler=birth_details_conversation,
         clear_handler=_handle_clear,
-        start_handler=_handle_start,
         help_handler=_handle_help,
         info_handler=_handle_info
+        # start_handler=_handle_start,  # REMOVE THIS LINE
     )
     await application.initialize()
     await application.start()
