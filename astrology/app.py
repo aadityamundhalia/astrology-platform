@@ -12,6 +12,11 @@ import logging.handlers
 from pathlib import Path
 import traceback
 import json
+from lottery_predictions import (
+    generate_lottery_predictions,
+    generate_all_lottery_predictions,
+    LOTTERY_CONFIGS
+)
 
 # Create logs directory if it doesn't exist
 logs_dir = Path("logs")
@@ -69,7 +74,8 @@ def root():
                 "/predictions/wealth",
                 "/predictions/health"
             ],
-            "wildcard": "/predictions/wildcard"
+            "wildcard": "/predictions/wildcard",
+            "lottery": ["/lottery/types", "/lottery/predict", "/lottery/predict-all"]
         }
     }
 
@@ -1176,3 +1182,92 @@ def monthly_horoscope(data: BirthData) -> Dict[str, Any]:
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+    
+class LotteryRequest(BaseModel):
+    date_of_birth: str
+    time_of_birth: str
+    place_of_birth: str
+    lottery_type: str
+    user_name: str = ""
+
+class AllLotteryRequest(BaseModel):
+    date_of_birth: str
+    time_of_birth: str
+    place_of_birth: str
+    user_name: str = ""
+
+@app.get("/lottery/types")
+def get_lottery_types():
+    """Get all available Australian lottery types"""
+    return {
+        "available_lotteries": {
+            lottery_id: {
+                "name": config["name"],
+                "draw_days": config["draw_days"],
+                "main_numbers": config["main_numbers"],
+                "special_numbers": {
+                    k: v for k, v in config.items() 
+                    if k in ["powerball", "supplementary", "bonus"]
+                },
+                "official_url": config.get("official_url", "")
+            }
+            for lottery_id, config in LOTTERY_CONFIGS.items()
+        }
+    }
+
+
+@app.post("/lottery/predict")
+def predict_lottery_numbers(data: LotteryRequest) -> Dict[str, Any]:
+    """Predict lottery numbers for a specific game"""
+    try:
+        if data.lottery_type not in LOTTERY_CONFIGS:
+            available = ", ".join(LOTTERY_CONFIGS.keys())
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid lottery type. Available: {available}"
+            )
+        
+        lat, lon = geocode_location(data.place_of_birth)
+        chart = calculate_chart(data.date_of_birth, data.time_of_birth, lat, lon)
+        chart["birth_date"] = data.date_of_birth
+        
+        prediction = generate_lottery_predictions(
+            chart, data.lottery_type, data.user_name
+        )
+        
+        prediction["birth_details"] = {
+            "date": data.date_of_birth,
+            "time": data.time_of_birth,
+            "place": data.place_of_birth,
+            "ascendant": chart["ascendant"]["sign"],
+            "moon_sign": chart["planets"]["Moon"]["sign"]
+        }
+        
+        return prediction
+        
+    except Exception as e:
+        logger.error(f"Error in lottery prediction: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+
+
+@app.post("/lottery/predict-all")
+def predict_all_lotteries(data: AllLotteryRequest) -> Dict[str, Any]:
+    """Predict numbers for all Australian lotteries"""
+    try:
+        lat, lon = geocode_location(data.place_of_birth)
+        chart = calculate_chart(data.date_of_birth, data.time_of_birth, lat, lon)
+        chart["birth_date"] = data.date_of_birth
+        
+        all_predictions = generate_all_lottery_predictions(chart, data.user_name)
+        
+        all_predictions["birth_details"] = {
+            "date": data.date_of_birth,
+            "time": data.time_of_birth,
+            "place": data.place_of_birth
+        }
+        
+        return all_predictions
+        
+    except Exception as e:
+        logger.error(f"Error in all lottery predictions: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")

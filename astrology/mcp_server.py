@@ -171,6 +171,27 @@ async def list_tools():
                 "category": "wildcard",
                 "required_fields": ["date_of_birth", "time_of_birth", "place_of_birth", "query"],
                 "optional_fields": ["specific_date"]
+            },
+            {
+                "name": "get_lottery_types",
+                "description": "Get all available Australian lottery types and configurations",
+                "category": "lottery",
+                "required_fields": [],
+                "optional_fields": []
+            },
+            {
+                "name": "predict_lottery_numbers",
+                "description": "Predict lucky lottery numbers for specific Australian lottery",
+                "category": "lottery",
+                "required_fields": ["date_of_birth", "time_of_birth", "place_of_birth", "lottery_type"],
+                "optional_fields": ["user_name"]
+            },
+            {
+                "name": "predict_all_lotteries",
+                "description": "Predict lucky numbers for ALL Australian lotteries",
+                "category": "lottery",
+                "required_fields": ["date_of_birth", "time_of_birth", "place_of_birth"],
+                "optional_fields": ["user_name"]
             }
         ]
     }
@@ -192,6 +213,9 @@ async def execute_tool(request: ToolRequest):
         "get_wealth_prediction": "/predictions/wealth",
         "get_health_prediction": "/predictions/health",
         "get_wildcard_prediction": "/predictions/wildcard",
+        "get_lottery_types": "/lottery/types",
+        "predict_lottery_numbers": "/lottery/predict",
+        "predict_all_lotteries": "/lottery/predict-all",
     }
     
     tool_name = request.tool_name
@@ -346,6 +370,36 @@ async def get_wildcard(data: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=result.error)
     return result.data
 
+@app.get("/lottery-types")
+async def get_lottery_types_mcp():
+    """Direct endpoint for lottery types"""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(f"{VEDASTRO_API_URL}/lottery/types")
+        return response.json()
+
+
+@app.post("/lottery")
+async def predict_lottery_mcp(data: Dict[str, Any]):
+    """Direct endpoint for lottery prediction"""
+    result = await execute_tool(ToolRequest(
+        tool_name="predict_lottery_numbers",
+        arguments=data
+    ))
+    if not result.success:
+        raise HTTPException(status_code=500, detail=result.error)
+    return result.data
+
+
+@app.post("/lottery-all")
+async def predict_all_lotteries_mcp(data: Dict[str, Any]):
+    """Direct endpoint for all lottery predictions"""
+    result = await execute_tool(ToolRequest(
+        tool_name="predict_all_lotteries",
+        arguments=data
+    ))
+    if not result.success:
+        raise HTTPException(status_code=500, detail=result.error)
+    return result.data
 
 if __name__ == "__main__":
     logger.info(f"Starting Vedic Astrology MCP Server on port {MCP_PORT}")
