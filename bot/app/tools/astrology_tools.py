@@ -1,6 +1,6 @@
 """Astrology tools for Semantic Kernel with MCP HTTP server"""
 from semantic_kernel.functions import kernel_function
-from typing import Annotated
+from typing import Annotated, Optional
 import json
 
 class AstrologyTools:
@@ -82,7 +82,7 @@ class AstrologyTools:
         self,
         birth_data: Annotated[str, "JSON string with birth details"],
         question: Annotated[str, "The specific question to ask (e.g., 'Should I take this job offer on Dec 15?')"],
-        specific_date: Annotated[str, "Optional specific date in YYYY-MM-DD format"] = None
+        specific_date: str | None = None
     ) -> Annotated[str, "Answer with success probability and recommendation"]:
         """Ask a specific question using wildcard endpoint"""
         data = json.loads(birth_data)
@@ -90,5 +90,54 @@ class AstrologyTools:
             data, 
             question, 
             specific_date
+        )
+        return json.dumps(result, indent=2)
+    
+    @kernel_function(
+        name="get_lottery_types",
+        description="Get all available Australian lottery types and their configurations"
+    )
+    async def get_lottery_types(self) -> Annotated[str, "List of available lottery types"]:
+        """Get lottery types"""
+        result = await self.astrology_service.get_lottery_types()
+        return json.dumps(result, indent=2)
+    
+    @kernel_function(
+        name="predict_lottery_numbers",
+        description="Predict lucky lottery numbers for a specific Australian lottery type based on birth chart"
+    )
+    async def predict_lottery_numbers(
+        self,
+        birth_data: Annotated[str, "JSON string with birth details"],
+        lottery_type: Annotated[str, "Lottery type (e.g., 'powerball', 'oz-lotto', 'tatts-lotto')"],
+        user_name: str | None = None,
+        num_sets: Annotated[int, "Number of sets of numbers to generate (default: 1)"] = 1
+    ) -> Annotated[str, "Lottery prediction with lucky numbers"]:
+        """Predict lottery numbers for specific type"""
+        data = json.loads(birth_data)
+        result = await self.astrology_service.predict_lottery_numbers(
+            data, 
+            lottery_type, 
+            user_name,
+            num_sets
+        )
+        return json.dumps(result, indent=2)
+    
+    @kernel_function(
+        name="predict_all_lotteries",
+        description="Predict lucky numbers for ALL available Australian lotteries based on birth chart"
+    )
+    async def predict_all_lotteries(
+        self,
+        birth_data: Annotated[str, "JSON string with birth details"],
+        user_name: str | None = None,
+        num_sets: Annotated[int, "Number of sets of numbers to generate for each lottery (default: 1)"] = 1
+    ) -> Annotated[str, "Predictions for all lottery types"]:
+        """Predict numbers for all lotteries"""
+        data = json.loads(birth_data)
+        result = await self.astrology_service.predict_all_lotteries(
+            data, 
+            user_name,
+            num_sets
         )
         return json.dumps(result, indent=2)

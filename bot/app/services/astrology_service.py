@@ -203,6 +203,55 @@ class AstrologyService:
             
         return await self._make_request("/wildcard", wildcard_data, self.medium_timeout)
     
+    async def get_lottery_types(self) -> Dict[str, Any]:
+        """Get all available lottery types"""
+        try:
+            async with httpx.AsyncClient(timeout=self.quick_timeout) as client:
+                logger.info("Getting lottery types from MCP server")
+                response = await client.get(f"{self.base_url}/lottery-types")
+                
+                if response.status_code == 200:
+                    logger.info("Successfully retrieved lottery types")
+                    return response.json()
+                else:
+                    logger.error(f"Failed to get lottery types: {response.status_code} - {response.text}")
+                    return {"error": f"HTTP {response.status_code}", "details": response.text[:200]}
+                    
+        except Exception as e:
+            logger.error(f"Error getting lottery types: {e}")
+            return {"error": str(e)}
+    
+    async def predict_lottery_numbers(self, birth_data: Dict[str, Any], lottery_type: str, 
+                                     user_name: Optional[str] = None, num_sets: int = 1) -> Dict[str, Any]:
+        """
+        Predict lucky lottery numbers for specific lottery type
+        
+        Args:
+            birth_data: User's birth information
+            lottery_type: Type of lottery (e.g., 'powerball', 'oz-lotto')
+            user_name: Optional user name for personalization
+        """
+        lottery_data = {**birth_data, "lottery_type": lottery_type, "num_sets": num_sets}
+        if user_name:
+            lottery_data["user_name"] = user_name
+            
+        return await self._make_request("/lottery", lottery_data, self.medium_timeout)
+    
+    async def predict_all_lotteries(self, birth_data: Dict[str, Any], 
+                                   user_name: Optional[str] = None, num_sets: int = 1) -> Dict[str, Any]:
+        """
+        Predict lucky numbers for all available lotteries
+        
+        Args:
+            birth_data: User's birth information
+            user_name: Optional user name for personalization
+        """
+        lottery_data = {**birth_data, "num_sets": num_sets}
+        if user_name:
+            lottery_data["user_name"] = user_name
+            
+        return await self._make_request("/lottery-all", lottery_data, self.long_timeout)
+    
     async def get_daily_horoscope(self, birth_data: Dict[str, Any]) -> Dict[str, Any]:
         """Get daily horoscope (alias for today's prediction)"""
         return await self.get_today_prediction(birth_data)

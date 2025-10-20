@@ -95,12 +95,63 @@ async def test_mcp_integration():
     else:
         print(f"   ⚠️ Unexpected response format")
     
+    # Test 7: Lottery Types
+    print("\n7. Lottery Types (Quick)")
+    lottery_types = await service.get_lottery_types()
+    if 'error' in lottery_types:
+        print(f"   ❌ Error: {lottery_types['error']}")
+    elif isinstance(lottery_types, list):
+        print(f"   ✅ Found {len(lottery_types)} lottery types")
+        for lottery in lottery_types[:3]:  # Show first 3
+            print(f"      • {lottery.get('name', 'Unknown')}")
+    else:
+        print(f"   ⚠️ Unexpected response format")
+        print(f"   Type: {type(lottery_types)}")
+    
+    # Test 8: Lottery Prediction (Medium - ~30-60s)
+    print("\n8. Lottery Prediction - Powerball (Medium - ~30-60s)")
+    lottery_pred = await service.predict_lottery_numbers(
+        birth_data, 
+        "powerball",
+        "Test User"
+    )
+    if 'error' in lottery_pred:
+        print(f"   ❌ Error: {lottery_pred['error']}")
+    elif 'lottery_type' in lottery_pred:
+        print(f"   ✅ Lottery: {lottery_pred['lottery_type']}")
+        if 'numbers' in lottery_pred:
+            numbers = lottery_pred['numbers']
+            print(f"   ✅ Numbers: {numbers.get('main_numbers', [])}")
+            print(f"   ✅ Powerball: {numbers.get('powerball', 'N/A')}")
+    else:
+        print(f"   ⚠️ Unexpected response format")
+    
+    # Test 9: All Lotteries Prediction (Long - ~60-120s)
+    print("\n9. All Lotteries Prediction (Long - ~60-120s)")
+    print("   ⏳ This may take 1-2 minutes...")
+    all_lotteries = await service.predict_all_lotteries(birth_data, "Test User")
+    
+    if 'error' in all_lotteries:
+        print(f"   ❌ Error: {all_lotteries['error']}")
+        if 'timeout' in all_lotteries:
+            print(f"   ⚠️ Timed out after {all_lotteries['timeout']}s")
+    elif isinstance(all_lotteries, list):
+        print(f"   ✅ Got predictions for {len(all_lotteries)} lotteries")
+        for lottery in all_lotteries[:2]:  # Show first 2
+            lotto_type = lottery.get('lottery_type', 'Unknown')
+            numbers = lottery.get('numbers', {})
+            main_nums = numbers.get('main_numbers', [])
+            print(f"      • {lotto_type}: {main_nums}")
+    else:
+        print(f"   ⚠️ Unexpected response format")
+        print(f"   Keys: {list(all_lotteries.keys()) if isinstance(all_lotteries, dict) else 'Not dict'}")
+    
     print("\n" + "="*60)
     print("\n✅ All Tests Complete!")
     print("\nTest Summary:")
-    print("  ✅ Quick predictions: <30s (today, weekly)")
-    print("  ⏳ Medium predictions: 30-60s (wildcard, monthly)")
-    print("  ⏰ Long predictions: 60-120s (love, career, wealth, health)")
+    print("  ✅ Quick predictions: <30s (today, weekly, lottery types)")
+    print("  ⏳ Medium predictions: 30-60s (wildcard, monthly, single lottery)")
+    print("  ⏰ Long predictions: 60-120s (love, career, wealth, health, all lotteries)")
     print("\n💡 Tip: Limit months parameter to 3-6 for faster responses")
     print("💡 Normalized responses now have consistent structure!")
 

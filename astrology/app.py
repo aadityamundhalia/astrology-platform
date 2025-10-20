@@ -1189,12 +1189,14 @@ class LotteryRequest(BaseModel):
     place_of_birth: str
     lottery_type: str
     user_name: str = ""
+    num_sets: int = 1
 
 class AllLotteryRequest(BaseModel):
     date_of_birth: str
     time_of_birth: str
     place_of_birth: str
     user_name: str = ""
+    num_sets: int = 1
 
 @app.get("/lottery/types")
 def get_lottery_types():
@@ -1232,7 +1234,7 @@ def predict_lottery_numbers(data: LotteryRequest) -> Dict[str, Any]:
         chart["birth_date"] = data.date_of_birth
         
         prediction = generate_lottery_predictions(
-            chart, data.lottery_type, data.user_name
+            chart, data.lottery_type, data.user_name, data.num_sets
         )
         
         prediction["birth_details"] = {
@@ -1258,7 +1260,7 @@ def predict_all_lotteries(data: AllLotteryRequest) -> Dict[str, Any]:
         chart = calculate_chart(data.date_of_birth, data.time_of_birth, lat, lon)
         chart["birth_date"] = data.date_of_birth
         
-        all_predictions = generate_all_lottery_predictions(chart, data.user_name)
+        all_predictions = generate_all_lottery_predictions(chart, data.user_name, data.num_sets)
         
         all_predictions["birth_details"] = {
             "date": data.date_of_birth,

@@ -184,14 +184,14 @@ async def list_tools():
                 "description": "Predict lucky lottery numbers for specific Australian lottery",
                 "category": "lottery",
                 "required_fields": ["date_of_birth", "time_of_birth", "place_of_birth", "lottery_type"],
-                "optional_fields": ["user_name"]
+                "optional_fields": ["user_name", "num_sets"]
             },
             {
                 "name": "predict_all_lotteries",
                 "description": "Predict lucky numbers for ALL Australian lotteries",
                 "category": "lottery",
                 "required_fields": ["date_of_birth", "time_of_birth", "place_of_birth"],
-                "optional_fields": ["user_name"]
+                "optional_fields": ["user_name", "num_sets"]
             }
         ]
     }
