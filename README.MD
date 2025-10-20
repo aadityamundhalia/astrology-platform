@@ -2,6 +2,9 @@
 
 A comprehensive microservices-based astrology platform featuring a Telegram bot, memory service, and astrology calculation API.
 
+## Demo
+Telegram: rudie_astro_bot
+
 ## 🏗️ Architecture
 
 This platform consists of three main services:
