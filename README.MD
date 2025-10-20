@@ -21,6 +21,47 @@ This platform consists of three main services:
 - **Qdrant**: Vector database for memory storage
 - **Ollama**: External LLM service (not containerized)
 
+## ✨ Features
+
+### 🎯 Vedic Astrology Predictions
+- **Birth Chart Analysis**: Complete Vedic astrology calculations using Swiss Ephemeris
+- **Daily Guidance**: Personalized daily horoscopes and planetary insights
+- **Compatibility Matching**: Relationship and marriage compatibility analysis
+- **Career & Finance**: Professional guidance and wealth predictions
+- **Health & Wellness**: Astrological health insights and remedies
+
+### 🎲 Lottery Predictions
+- **Astrologically-Guided Numbers**: Lottery predictions based on planetary positions and birth chart analysis
+- **Multiple Lottery Types**: Support for Australian lotteries including:
+  - **Powerball** (Thursday draws)
+  - **Oz Lotto** (Tuesday draws)
+  - **Saturday Lotto** (Saturday draws)
+  - **Monday & Wednesday Lotto** (Monday/Wednesday draws)
+  - **Set for Life** (Daily draws)
+- **Multiple Sets**: Generate 1-10 sets of numbers per prediction
+- **Timing Advice**: Best times to purchase tickets based on astrological timing
+- **Confidence Levels**: Detailed confidence percentages with astrological reasoning
+- **Lucky Rituals**: Simple mantras and rituals to enhance chances
+
+### 🤖 AI-Powered Chat Bot
+- **Natural Language Processing**: Conversational AI using Semantic Kernel
+- **Memory Integration**: Context-aware conversations with Mem0 memory service
+- **Multi-Modal Responses**: Text, emojis, and structured data responses
+- **Privacy-First**: End-to-end encryption for all user data
+- **Queue-Based Processing**: Asynchronous message handling for scalability
+
+### 🧠 Advanced Memory System
+- **Vector Search**: Semantic memory retrieval using Qdrant
+- **Context Preservation**: Maintains conversation history and user preferences
+- **Intelligent Summarization**: Automatic conversation summarization
+- **Privacy Compliant**: Secure memory storage with encryption
+
+### 🔧 Developer-Friendly APIs
+- **RESTful Endpoints**: Well-documented APIs for all services
+- **MCP Server**: Model Context Protocol for seamless AI integration
+- **Health Monitoring**: Comprehensive health checks and metrics
+- **Docker Containerization**: Easy deployment and scaling
+
 ## 📋 Prerequisites
 
 - Docker and Docker Compose installed
